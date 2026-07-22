@@ -1,0 +1,24 @@
+{
+  "name": "caption-maker-worker",
+  "version": "0.1.0",
+  "description": "The Goose Tools caption worker — your computer writes social captions in your voice for goosetools.com using your own Claude account.",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ernkerr/caption-maker.git"
+  },
+  "files": [
+    "worker",
+    "voice.md",
+    "README.md"
+  ],
+  "type": "module",
+  "bin": {
+    "caption-worker": "worker/cli.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "worker": "node worker/index.js"
+  }
+}
