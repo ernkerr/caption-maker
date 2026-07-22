@@ -185,6 +185,60 @@ async function runVoiceJob(job) {
   console.log(`✓ voice ${job.id}: guide written (${voiceMd.length} chars)`);
 }
 
+// ── Learn job ────────────────────────────────────────────────────────────────
+// After a caption, fold what the user kept (and any correction they made) back
+// into their voice guide — so it sharpens over time like a chat that remembers.
+// Only rewrites when there's a durable preference to capture; otherwise leaves
+// the guide untouched (reported by completing without a voiceMd).
+function stripFences(text) {
+  return text.trim().replace(/^```[a-z]*\n?/i, "").replace(/\n?```$/i, "").trim();
+}
+
+function learnPrompt(job) {
+  const current = job.voiceMd?.trim() || readRepoVoice() || DEFAULT_VOICE;
+  const l = job.learn ?? {};
+  const bits = [`Post was about: ${job.postContext ?? "(not given)"}`];
+  if (l.beforeCaption) bits.push(`Draft the user refined away:\n${l.beforeCaption}`);
+  if (l.instruction) bits.push(`What the user asked to change: "${l.instruction}"`);
+  if (l.afterCaption) bits.push(`Caption the user kept:\n${l.afterCaption}`);
+
+  return `You maintain a living VOICE GUIDE for one person's social captions. It
+should get sharper over time by absorbing how they actually want captions
+written — especially the corrections they make.
+
+## Current voice guide
+${current}
+
+## The latest interaction to learn from
+${bits.join("\n\n")}
+
+## Your task
+Update the guide ONLY if this interaction reveals a DURABLE, GENERALIZABLE
+preference — a rule about tone, length, emoji, hashtags, phrasing, structure, or
+words to use or avoid. Fold it in naturally: merge with existing rules, never
+duplicate, keep the whole guide tight and skimmable. Keep a "## Learned" section
+at the end for preferences picked up this way; append or sharpen bullets there.
+
+If the change was one-off, or the guide already covers it, change NOTHING and
+return the guide EXACTLY as-is.
+
+Return ONLY the full markdown guide — no preamble, no code fences, no commentary.`;
+}
+
+async function runLearnJob(job) {
+  const current = (job.voiceMd ?? "").trim();
+  const updated = stripFences(await claude(learnPrompt(job)));
+  if (!updated || updated === current) {
+    // Nothing durable to learn — leave the guide untouched (no voiceMd → the
+    // server skips the write).
+    await api("complete", { jobId: job.id, ok: true });
+    console.log(`· learn ${job.id}: no change`);
+    return;
+  }
+  await api("complete", { jobId: job.id, ok: true, voiceMd: updated });
+  console.log(`✓ learn ${job.id}: voice updated (${updated.length} chars)`);
+}
+
 // ── Main loop ────────────────────────────────────────────────────────────────
 console.log(`Goose Tools caption worker connected to ${BASE_URL} — waiting for jobs (Ctrl+C to stop)`);
 let firstPoll = true;
@@ -200,6 +254,8 @@ while (true) {
       try {
         if (job.kind === "voice") {
           await runVoiceJob(job);
+        } else if (job.kind === "learn") {
+          await runLearnJob(job);
         } else if (job.kind === "caption" || !job.kind) {
           await runCaptionJob(job);
         } else {
