@@ -193,7 +193,7 @@ export function install({ url, token, root }) {
   else {
     console.error(
       "Automatic background setup isn't available on this OS yet.\n" +
-        "Run the worker directly instead:  caption-worker run",
+        "Run the worker directly instead:  caption-maker-worker run",
     );
     process.exit(1);
   }
