@@ -20,6 +20,6 @@
   },
   "scripts": {
     "worker": "node worker/index.js",
-    "test": "node --test test/"
+    "test": "node --test"
   }
 }

@@ -25,5 +25,5 @@ test("resolveSession keeps agents out of each other's sessions", () => {
 });
 
 test("cleanText strips ANSI noise", () => {
-  assert.equal(cleanText("[32mok[0m"), "ok");
+  assert.equal(cleanText("\u001b[32mok\u001b[0m"), "ok");
 });
