@@ -62,7 +62,15 @@ function servicePath() {
     npmGlobalBin(),
     ...(process.platform === "win32"
       ? [process.env.PATH ?? ""]
-      : ["/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin", "/usr/sbin", "/sbin"]),
+      : [
+          "/opt/homebrew/bin",
+          "/usr/local/bin",
+          `${process.env.HOME ?? ""}/.local/bin`,
+          "/usr/bin",
+          "/bin",
+          "/usr/sbin",
+          "/sbin",
+        ]),
   ].filter(Boolean);
   return [...new Set(parts)].join(process.platform === "win32" ? ";" : ":");
 }

@@ -15,7 +15,7 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
-const command = ["install", "update", "status", "uninstall", "run"].includes(process.argv[2])
+const command = ["install", "update", "status", "uninstall", "run", "doctor"].includes(process.argv[2])
   ? process.argv[2]
   : "run";
 
@@ -46,6 +46,20 @@ function has(cmd) {
   } catch {
     return false;
   }
+}
+
+// Claude Code is the default agent, so it's required to set up; the other
+// agents (picked in Setup on goosetools.com) are checked lazily per job and
+// reported by `doctor`.
+if (command === "doctor") {
+  const { AGENT_IDS, detect } = await import("./agent-cli.js");
+  for (const id of AGENT_IDS) {
+    const d = detect(id);
+    console.log(
+      `${d.installed ? "✓" : "✗"} ${d.label}${d.installed ? "" : `  — install: ${d.hint}`}`,
+    );
+  }
+  process.exit(0);
 }
 
 if (!has("claude")) {

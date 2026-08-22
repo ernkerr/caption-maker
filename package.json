@@ -19,6 +19,7 @@
     "node": ">=20"
   },
   "scripts": {
-    "worker": "node worker/index.js"
+    "worker": "node worker/index.js",
+    "test": "node --test test/"
   }
 }

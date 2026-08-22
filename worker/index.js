@@ -1,17 +1,17 @@
 // Goose Tools caption worker — polls the cloud queue, writes captions in the
-// user's voice with the local Claude Code login, reports the text back. Runs
+// user's voice with the local agent CLI login (Claude Code by default; the
+// claim payload's agentCli can pick codex/gemini/opencode), reports the text
+// back. Runs
 // on the user's own machine; talks to the server only over HTTPS with its
 // worker token (the SAME token as the carousel worker — one connected computer
 // serves both tools).
 
-import { execFile } from "node:child_process";
+import { runAgent } from "./agent-cli.js";
 import { readFileSync, existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { promisify } from "node:util";
 
-const execFileAsync = promisify(execFile);
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
 // ── Config: flags > env > worker/.env > ~/.goosetools/env ───────────────────
@@ -71,16 +71,18 @@ async function api(path, body) {
   return res.json();
 }
 
-// ── Claude ─────────────────────────────────────────────────────────────────
-// Draft with the local Claude Code login. Text in, text out — no tools needed
-// (captions are pure text, unlike carousels which read photos).
-async function claude(prompt) {
-  const { stdout } = await execFileAsync(
-    "claude",
-    ["-p", prompt, "--output-format", "text"],
-    { maxBuffer: 10 * 1024 * 1024, timeout: 5 * 60 * 1000 },
-  );
-  return stdout;
+// ── Agent ──────────────────────────────────────────────────────────────────
+// Draft with the local agent CLI the user picked on goosetools.com (the claim
+// payload's agentCli; Claude Code when absent). Text in, text out — no tools
+// needed (captions are pure text, unlike carousels which read photos).
+async function draft(job, prompt) {
+  const { text } = await runAgent({
+    agent: job.agentCli,
+    prompt,
+    mode: "text",
+    timeoutMs: 5 * 60 * 1000,
+  });
+  return text;
 }
 
 // Strip the things models sometimes wrap a caption in despite being told not
@@ -142,8 +144,8 @@ ${convo}${refine}
 }
 
 async function runCaptionJob(job) {
-  const caption = cleanCaption(await claude(captionPrompt(job)));
-  if (!caption) throw new Error("Claude returned an empty caption");
+  const caption = cleanCaption(await draft(job, captionPrompt(job)));
+  if (!caption) throw new Error("The agent returned an empty caption");
   await api("complete", { jobId: job.id, ok: true, caption });
   console.log(`✓ caption ${job.id}: ${caption.slice(0, 60).replace(/\n/g, " ")}…`);
 }
@@ -175,12 +177,12 @@ description gives them.`;
 }
 
 async function runVoiceJob(job) {
-  const voiceMd = (await claude(voicePrompt(job)))
+  const voiceMd = (await draft(job, voicePrompt(job)))
     .trim()
     .replace(/^```[a-z]*\n?/i, "")
     .replace(/\n?```$/i, "")
     .trim();
-  if (!voiceMd) throw new Error("Claude returned an empty voice guide");
+  if (!voiceMd) throw new Error("The agent returned an empty voice guide");
   await api("complete", { jobId: job.id, ok: true, voiceMd });
   console.log(`✓ voice ${job.id}: guide written (${voiceMd.length} chars)`);
 }
@@ -227,7 +229,7 @@ Return ONLY the full markdown guide — no preamble, no code fences, no commenta
 
 async function runLearnJob(job) {
   const current = (job.voiceMd ?? "").trim();
-  const updated = stripFences(await claude(learnPrompt(job)));
+  const updated = stripFences(await draft(job, learnPrompt(job)));
   if (!updated || updated === current) {
     // Nothing durable to learn — leave the guide untouched (no voiceMd → the
     // server skips the write).
