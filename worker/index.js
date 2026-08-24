@@ -41,7 +41,15 @@ const BASE_URL = (
   "https://goosetools.com"
 ).replace(/\/$/, "");
 const TOKEN = flag("--token") ?? process.env.WORKER_TOKEN ?? dotenv.WORKER_TOKEN;
-const POLL_MS = 30_000;
+// Fast for a stretch after the last job (someone is actively working), 60s
+// once things go quiet — a flat 30s poll across four workers kept the prod
+// database awake 24/7 and burned its whole compute quota.
+const POLL_FAST_MS = 5_000;
+const POLL_IDLE_MS = 60_000;
+const STAY_FAST_MS = 2 * 60 * 1000;
+let lastJobAt = 0;
+const pollDelay = () =>
+  Date.now() - lastJobAt < STAY_FAST_MS ? POLL_FAST_MS : POLL_IDLE_MS;
 
 if (!TOKEN) {
   console.error(
@@ -253,6 +261,7 @@ while (true) {
       firstPoll = false;
     }
     if (job) {
+      lastJobAt = Date.now();
       try {
         if (job.kind === "voice") {
           await runVoiceJob(job);
@@ -274,5 +283,5 @@ while (true) {
   } catch (e) {
     console.error(`Poll failed (will retry): ${e.message}`);
   }
-  await new Promise((r) => setTimeout(r, POLL_MS));
+  await new Promise((r) => setTimeout(r, pollDelay()));
 }
