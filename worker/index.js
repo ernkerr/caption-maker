@@ -11,6 +11,14 @@ import { readFileSync, existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { acquireWorkerLock } from "./lock.js";
+
+// One worker of each kind per machine — a second one would split the queue
+// with this one. Stands down with an explanation if another already holds it.
+acquireWorkerLock("caption", {
+  label: "The Caption Maker worker",
+  stopHint: "launchctl bootout gui/$(id -u)/com.goosetools.caption   (or close its terminal)",
+});
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
